@@ -1,4 +1,4 @@
-// Select your modem:
+  // Select your modem:
 #define TINY_GSM_MODEM_SIM800
 //#define TINY_GSM_MODEM_SIM900
 //#define TINY_GSM_MODEM_A6
@@ -11,11 +11,13 @@
 // Can be installed from Library Manager or https://github.com/vshymanskyy/TinyGSM
 #include <TinyGsmClient.h>
 #include <ThingerTinyGSM.h>
+#include <StringSplitter.h>
+
 
 // Emulate Serial1 on pins 10/11 if HW is not present (use interrupt pin in RX for better performance)
 #ifndef HAVE_HWSERIAL1
 #include "SoftwareSerial.h"
-SoftwareSerial Serial1(9, 2); // RX, TX
+SoftwareSerial Serial1(3, 2); // RX, TX
 #endif
 
 #define USERNAME "Ubilogica"
@@ -29,6 +31,10 @@ SoftwareSerial Serial1(9, 2); // RX, TX
 
 // set your cad pin (optional)
 #define CARD_PIN ""
+
+//variables para ubicacion 
+float lat;
+float lon;
 
 
 //Variables para conductividad 
@@ -55,6 +61,8 @@ int samplingPeriod=3; // the number of seconds to measure 555 oscillations
 #define SERIESRESISTOR 10000    
 
 ThingerTinyGSM thing(USERNAME, DEVICE_ID, DEVICE_CREDENTIAL, Serial1);
+TinyGsm gsm= thing.getTinyGsm();
+String im;
 
 void setup() {
   // uncomment line for debug
@@ -72,29 +80,29 @@ void setup() {
   // resource input example (i.e, controlling a digitalPin);
   pinMode(13, OUTPUT);
   thing["led"] << digitalPin(13);
-
+  
+  //float lat=latitude();
+  //float lon=longitude();
+  StringSplitter *splitter = new StringSplitter(gsm.getGsmLocation(), ',', 4);
+  lat = splitter->getItemAtIndex(2).toFloat();
+  lon = splitter->getItemAtIndex(1).toFloat();
+  im=gsm.getIMEI();
+  delay(3000);
+    
   thing["sensores"] >> [](pson& out){
         out["temperature"] = temperature();
         out["conductivity"] = conductivity();
+        out["imei"] = imei();
+        out["bateria"] = gsm.getBattPercent();
+        out["latitude"] = latitude();
+        out["longitude"] = longitude();
   };
 
-  // resource output example (i.e. reading a sensor value)
-  //thing["millis"] >> outputValue(millis());
-
-  //thing["conductivity"] >> outputValue(conductivity());
-
-  //thing["temperature"] >> outputValue(temperature());
-
-  // more details at http://docs.thinger.io/arduino/
 }
 
 void loop() {
   thing.handle();
 }
-
-
-
-
 
 float temperature(){
     uint8_t i;
@@ -153,3 +161,9 @@ void onPulse()  //ver si esta en COnd
   duration=pulseTime-lastTime;
   totalDuration+=duration;
 }
+
+float latitude() {return lat;}
+
+float longitude() {return lon;}
+
+String imei() {return im;}
