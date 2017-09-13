@@ -17,12 +17,14 @@
 // Emulate Serial1 on pins 10/11 if HW is not present (use interrupt pin in RX for better performance)
 #ifndef HAVE_HWSERIAL1
 #include "SoftwareSerial.h"
-SoftwareSerial Serial1(3, 2); // RX, TX
+SoftwareSerial Serial1(9, 2); // RX, TX  //for narduino uno (3,2)
 #endif
 
 #define USERNAME "Ubilogica"
 #define DEVICE_ID "progresar"
 #define DEVICE_CREDENTIAL "BceAqr2o"
+#define FONA_KEY 8
+#define FONA_PS A1
 
 // use your own APN config
 #define APN_NAME "internet.comcel.com.co"
@@ -76,26 +78,24 @@ void setup() {
 
   // set PIN (optional)
   // thing.setPin(CARD_PIN);
-
+  power_on_fona();
   // resource input example (i.e, controlling a digitalPin);
   pinMode(13, OUTPUT);
   thing["led"] << digitalPin(13);
   
-  //float lat=latitude();
-  //float lon=longitude();
   StringSplitter *splitter = new StringSplitter(gsm.getGsmLocation(), ',', 4);
-  lat = splitter->getItemAtIndex(2).toFloat();
-  lon = splitter->getItemAtIndex(1).toFloat();
+  //lat = splitter->getItemAtIndex(2).toFloat();
+  //lon = splitter->getItemAtIndex(1).toFloat();
   im=gsm.getIMEI();
-  delay(3000);
+  //delay(3000);
     
   thing["sensores"] >> [](pson& out){
         out["temperature"] = temperature();
         out["conductivity"] = conductivity();
         out["imei"] = imei();
         out["bateria"] = gsm.getBattPercent();
-        out["latitude"] = latitude();
-        out["longitude"] = longitude();
+        //out["latitude"] = latitude();
+        //out["longitude"] = longitude();
   };
 
 }
@@ -137,19 +137,34 @@ float temperature(){
 
 
 float conductivity(){
+  delay(2000); // recover time
+  double durationS;
+  pulseCount=0;
+  totalDuration=0;
   attachInterrupt(interruptPin,onPulse,RISING); //attach an interrupt counter to interrupt pin 1 (digital pin #3) -- the only other possible pin on the 328p is interrupt pin #0 (digital pin #2)
   pulseTime=micros(); // start the stopwatch
   delay(samplingPeriod*1000); //give ourselves samplingPeriod seconds to make this measurement, during which the "onPulse" function will count up all the pulses, and sum the total time they took as 'totalDuration' 
   detachInterrupt(interruptPin); //we've finished sampling, so detach the interrupt function -- don't count any more pulses
   float freqHertz;
   if (pulseCount>0) { //use this logic in case something went wrong
-    double durationS=(totalDuration/double(pulseCount))/1000000.; //the total duration, in seconds, per pulse (note that totalDuration was in microseconds)
+    durationS=(totalDuration/double(pulseCount))/1000000.; //the total duration, in seconds, per pulse (note that totalDuration was in microseconds)
     freqHertz=1./durationS;
   }
   else {
     freqHertz=0.;
   }
-  return freqHertz;
+//  Serial.print("sampling period=");
+//  Serial.print(samplingPeriod);
+//    Serial.print(" sec; #pulses=");
+//  Serial.print(pulseCount);
+//  Serial.print("; duration per pulse (sec)=");
+//  Serial.print(durationS,8);
+//  Serial.print("; Total Duration =");
+//  Serial.print(totalDuration,8);
+//  Serial.print("; Freq =");
+//  Serial.println(freqHertz,8);
+  return 0.1368464495*double(pulseCount)-36.01210494;
+
 }
 
 
@@ -167,3 +182,15 @@ float latitude() {return lat;}
 float longitude() {return lon;}
 
 String imei() {return im;}
+
+void power_on_fona()
+{
+  
+  if (digitalRead(FONA_PS)==0) {
+    digitalWrite(FONA_KEY, HIGH);delay(100);
+    digitalWrite(FONA_KEY,LOW);delay(2000);
+    digitalWrite(FONA_KEY,HIGH);delay(5000);   
+    Serial.println(F("Fona Encendido"));
+  }
+   
+}
