@@ -1,42 +1,37 @@
-  // Select your modem:
+// Select your modem
 #define TINY_GSM_MODEM_SIM800
-//#define TINY_GSM_MODEM_SIM900
-//#define TINY_GSM_MODEM_A6
-//#define TINY_GSM_MODEM_A7
-//#define TINY_GSM_MODEM_M590
 
 // uncomment line for debug
-//#define _DEBUG_
+#define _DEBUG_
 
 // Can be installed from Library Manager or https://github.com/vshymanskyy/TinyGSM
 #include <TinyGsmClient.h>
 #include <ThingerTinyGSM.h>
-#include <StringSplitter.h>
-
 
 // Emulate Serial1 on pins 10/11 if HW is not present (use interrupt pin in RX for better performance)
 #ifndef HAVE_HWSERIAL1
 #include "SoftwareSerial.h"
-SoftwareSerial Serial1(9, 2); // RX, TX  //for narduino uno (3,2)
+SoftwareSerial Serial1(9, 2); // RX, TX  //for arduino uno (3,2)
 #endif
 
-#define USERNAME "Ubilogica"
-#define DEVICE_ID "progresar"
-#define DEVICE_CREDENTIAL "BceAqr2o"
+//thinger credential, change in each device
+#define USERNAME "Progresar"  //Nombre de usuario en thinger 
+#define DEVICE_ID "progresar_06"   // ID del dispositivos en thinger 
+#define DEVICE_CREDENTIAL "madfapdf0006"  // Clave del dispositivo para cada uno en thinger 
+
 #define FONA_KEY 8
 #define FONA_PS A1
 
 // use your own APN config
-#define APN_NAME "internet.comcel.com.co"
-#define APN_USER "comcel"
-#define APN_PSWD "comcel"
+#define APN_NAME "internet.movistar.com.co"
+#define APN_USER "movistar"
+#define APN_PSWD "movistar"
 
 // set your cad pin (optional)
 #define CARD_PIN ""
 
 //variables para ubicacion 
-float lat;
-float lon;
+//int hysteresis = 0; // defined as a global variable
 
 
 //Variables para conductividad 
@@ -67,8 +62,14 @@ TinyGsm gsm= thing.getTinyGsm();
 String im;
 
 void setup() {
+
+  Serial.begin(115200);
+  pinMode(FONA_PS,INPUT);
+  pinMode(FONA_KEY, OUTPUT);
+  digitalWrite(FONA_KEY, HIGH);
+  power_on_fona();
   // uncomment line for debug
-  //Serial.begin(115200);
+  Serial.begin(115200);
 
   // Serial for AT commands (can be higher with HW Serial, or even lower in SW Serial)
   Serial1.begin(57600);
@@ -82,26 +83,45 @@ void setup() {
   // resource input example (i.e, controlling a digitalPin);
   pinMode(13, OUTPUT);
   thing["led"] << digitalPin(13);
-  
-  StringSplitter *splitter = new StringSplitter(gsm.getGsmLocation(), ',', 4);
-  //lat = splitter->getItemAtIndex(2).toFloat();
-  //lon = splitter->getItemAtIndex(1).toFloat();
+
+//  thing["hysteresis"] << [](pson& in){
+//    if(in.is_empty()){
+//      in=hysteresis;
+//    }else{
+//      hysteresis=in;
+//    }
+//  };
+
   im=gsm.getIMEI();
-  //delay(3000);
     
   thing["sensores"] >> [](pson& out){
-        out["temperature"] = temperature();
-        out["conductivity"] = conductivity();
+        out["temperature"] = round(temperature());
+        out["conductivity"] = round(conductivity());
         out["imei"] = imei();
         out["bateria"] = gsm.getBattPercent();
-        //out["latitude"] = latitude();
-        //out["longitude"] = longitude();
   };
-
+  thing.call_endpoint("telegram",thing["sensores"]);
 }
+
+unsigned long lastCheck = 0;
 
 void loop() {
   thing.handle();
+
+  unsigned long currentTs = millis();
+  if(currentTs-lastCheck>=60000){
+      lastCheck = currentTs;
+      if(temperature()>30.){
+          thing.call_endpoint("alerta",thing["sensores"]);
+      }
+      if(conductivity()>1000.){
+          thing.call_endpoint("alerta_cond",thing["sensores"]);
+      }
+      if(gsm.getBattPercent()<25.){
+          thing.call_endpoint("alerta_bat",thing["sensores"]);
+      }
+  }
+
 }
 
 float temperature(){
@@ -153,17 +173,7 @@ float conductivity(){
   else {
     freqHertz=0.;
   }
-//  Serial.print("sampling period=");
-//  Serial.print(samplingPeriod);
-//    Serial.print(" sec; #pulses=");
-//  Serial.print(pulseCount);
-//  Serial.print("; duration per pulse (sec)=");
-//  Serial.print(durationS,8);
-//  Serial.print("; Total Duration =");
-//  Serial.print(totalDuration,8);
-//  Serial.print("; Freq =");
-//  Serial.println(freqHertz,8);
-  return 0.1368464495*double(pulseCount)-36.01210494;
+  return 0.1368464495*double(pulseCount);
 
 }
 
@@ -177,20 +187,14 @@ void onPulse()  //ver si esta en COnd
   totalDuration+=duration;
 }
 
-float latitude() {return lat;}
-
-float longitude() {return lon;}
-
 String imei() {return im;}
 
 void power_on_fona()
 {
-  
   if (digitalRead(FONA_PS)==0) {
-    digitalWrite(FONA_KEY, HIGH);delay(100);
+    digitalWrite(FONA_KEY, HIGH);//delay(100);
     digitalWrite(FONA_KEY,LOW);delay(2000);
-    digitalWrite(FONA_KEY,HIGH);delay(5000);   
-    Serial.println(F("Fona Encendido"));
+    digitalWrite(FONA_KEY,HIGH);//delay(5000);   
   }
-   
-}
+}   
+
